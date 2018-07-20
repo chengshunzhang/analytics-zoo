@@ -5,23 +5,50 @@ import java.util.Arrays;
 import java.util.List;
 
 public class JTensor {
-  private List<Float> data;
+  private float[] data;
   private List<Integer> shape;
 
   public JTensor() {
   }
 
   public JTensor(List<Float> data, List<Integer> shape) {
-    this.data = data;
+    this.data = new float[data.size()];
+    for (int i = 0; i < data.size(); i++){
+      this.data[i] = data.get(i);
+    }
     this.shape = shape;
   }
 
   public JTensor(List<Float> data, Integer[] shape) {
-    this.data = data;
+    this.data = new float[data.size()];
+    for (int i = 0; i < data.size(); i++){
+      this.data[i] = data.get(i);
+    }
     this.shape = Arrays.asList(shape);
   }
 
   public JTensor(List<Float> data, int[] shape) {
+    this.data = new float[data.size()];
+    for (int i = 0; i < data.size(); i++){
+      this.data[i] = data.get(i);
+    }
+    this.shape = new ArrayList<Integer>();
+    for(int s : shape) {
+      this.shape.add(s);
+    }
+  }
+
+  public JTensor(float[] data, List<Integer> shape) {
+    this.data = data;
+    this.shape = shape;
+  }
+
+  public JTensor(float[] data, Integer[] shape) {
+    this.data = data;
+    this.shape = Arrays.asList(shape);
+  }
+
+  public JTensor(float[] data, int[] shape) {
     this.data = data;
     this.shape = new ArrayList<Integer>();
     for(int s : shape) {
@@ -29,11 +56,11 @@ public class JTensor {
     }
   }
 
-  public List<Float> getData() {
+  public float[] getData() {
     return data;
   }
 
-  public void setData(List<Float> data) {
+  public void setData(float[] data) {
     this.data = data;
   }
 
