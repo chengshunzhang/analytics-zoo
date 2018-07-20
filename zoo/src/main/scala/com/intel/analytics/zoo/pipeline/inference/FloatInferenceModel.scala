@@ -37,9 +37,13 @@ class FloatInferenceModel(
   @transient var predictor: LocalPredictor[Float]) extends InferenceSupportive with Serializable {
 
   @deprecated
-  def predict(input: Array[Float], shape: JList[JInt]): JList[JFloat] = {
+  def predict(input: JList[JFloat], shape: JList[JInt]): JList[JFloat] = {
     timing("model predict") {
-      val sample = transferInputToSample(input, shape)
+      val input_arr = new Array[Float](input.size())
+      for (i <- 0 until input.size()){
+        input_arr(i) = input.get(i)
+      }
+      val sample = transferInputToSample(input_arr, shape)
       val result = predictor.predict(Array(sample))
       require(result.length == 1, "only one input, should get only one prediction")
       result(0).asInstanceOf[Tensor[Float]].toArray().toList.asJava.asInstanceOf[JList[JFloat]]
@@ -56,7 +60,7 @@ class FloatInferenceModel(
         val input = inputs.get(i)
         val inputData = input.getData
         val inputShape = input.getShape
-        val sample = transferInputToSample(inputData, inputShape)
+        val sample = transferInputToSample(inputData, inputShape.toList.asJava.asInstanceOf[JList[JInt]])
         samples(i) = sample
         i += 1
       }

@@ -71,7 +71,7 @@ public abstract class AbstractInferenceModel implements Serializable {
   }
 
   @Deprecated
-  public List<Float> predict(float[] input, int... shape) {
+  public List<Float> predict(List<Float> input, int... shape) {
     List<Integer> inputShape = new ArrayList<Integer>();
     for (int s : shape) {
       inputShape.add(s);

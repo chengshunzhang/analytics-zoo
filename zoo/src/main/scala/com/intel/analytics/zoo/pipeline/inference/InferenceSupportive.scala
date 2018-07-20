@@ -76,8 +76,6 @@ trait InferenceSupportive {
   @inline
   def transferInputToSample(input: Array[Float], inputShape: JList[JInt])
     : Sample[Float] = {
-    //require(input.size() == product(inputShape), "data size not fit shape")
-    //val inputData = toFloatArray(input)
     Sample(Tensor(data = input, shape = toIntArray(inputShape)))
   }
 
