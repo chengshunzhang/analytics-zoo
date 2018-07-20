@@ -37,7 +37,7 @@ class FloatInferenceModel(
   @transient var predictor: LocalPredictor[Float]) extends InferenceSupportive with Serializable {
 
   @deprecated
-  def predict(input: JList[JFloat], shape: JList[JInt]): JList[JFloat] = {
+  def predict(input: Array[Float], shape: JList[JInt]): JList[JFloat] = {
     timing("model predict") {
       val sample = transferInputToSample(input, shape)
       val result = predictor.predict(Array(sample))
