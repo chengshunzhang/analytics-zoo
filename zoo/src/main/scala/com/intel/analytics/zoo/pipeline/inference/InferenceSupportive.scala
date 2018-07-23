@@ -74,9 +74,9 @@ trait InferenceSupportive {
   }
 
   @inline
-  def transferInputToSample(input: Array[Float], inputShape: JList[JInt])
+  def transferInputToSample(input: Array[Float], inputShape: Array[Int])
     : Sample[Float] = {
-    Sample(Tensor(data = input, shape = toIntArray(inputShape)))
+    Sample(Tensor(data = input, shape = inputShape))
   }
 
   def transferTensorToJTensor(input: Tensor[Float]): JTensor = {
