@@ -18,7 +18,7 @@ package com.intel.analytics.zoo.pipeline.api.keras.python
 
 import java.nio.ByteOrder
 import java.util
-import java.util.{List => JList, Map => JMap, HashMap => JHashMap}
+import java.util.{HashMap => JHashMap, List => JList, Map => JMap}
 
 import com.intel.analytics.bigdl.Criterion
 import com.intel.analytics.bigdl.dataset.{DataSet, LocalDataSet, MiniBatch}
@@ -39,7 +39,7 @@ import com.intel.analytics.zoo.pipeline.api.keras.layers._
 import com.intel.analytics.zoo.pipeline.api.keras.layers.utils.KerasUtils
 import com.intel.analytics.zoo.pipeline.api.keras.metrics.{AUC, Accuracy, Top5Accuracy}
 import com.intel.analytics.zoo.pipeline.api.keras.models.{KerasNet, Model, Sequential}
-import com.intel.analytics.zoo.pipeline.api.keras.objectives.{MeanAbsoluteError, SparseCategoricalCrossEntropy}
+import com.intel.analytics.zoo.pipeline.api.keras.objectives._
 import com.intel.analytics.zoo.pipeline.api.net.{GraphNet, NetUtils, TFNet}
 import org.apache.spark.api.java.JavaRDD
 
@@ -125,8 +125,8 @@ class PythonZooKeras[T: ClassTag](implicit ev: TensorNumeric[T]) extends PythonB
   def zooPredict(
       module: KerasNet[T],
       x: JavaRDD[Sample],
-      batchSize: Int = 32): JavaRDD[JList[Object]] = {
-    val resRDD = module.predict(x.rdd.map(toJSample), batchSize)
+      batchPerThread: Int): JavaRDD[JList[Object]] = {
+    val resRDD = module.predict(x.rdd.map(toJSample), batchPerThread)
     resRDD.map(activityToList).toJavaRDD()
   }
 
@@ -168,12 +168,19 @@ class PythonZooKeras[T: ClassTag](implicit ev: TensorNumeric[T]) extends PythonB
   def zooPredict(
       module: KerasNet[T],
       x: JList[JTensor],
-      batchSize: Int): JList[JList[Object]] = {
+      batchPerThread: Int): JList[JList[Object]] = {
     val sampleArray = toSampleArray(x.asScala.toList.map{f => toTensor(f)})
     val localPredictor = LocalPredictor(module,
-      batchPerCore = KerasUtils.calBatchPerCore(batchSize))
+      batchPerCore = batchPerThread)
     val result = localPredictor.predict(sampleArray)
     result.map(activityToList).toList.asJava
+  }
+
+  def zooPredict(
+      module: KerasNet[T],
+      x: ImageSet,
+      batchPerThread: Int): ImageSet = {
+    module.predict(x, batchPerThread)
   }
 
   def zooEvaluate(
@@ -181,6 +188,18 @@ class PythonZooKeras[T: ClassTag](implicit ev: TensorNumeric[T]) extends PythonB
       x: JavaRDD[Sample],
       batchSize: Int = 32): JList[EvaluatedResult] = {
     val resultArray = module.evaluate(toJSample(x), batchSize)
+    val testResultArray = resultArray.map { result =>
+      EvaluatedResult(result._1.result()._1, result._1.result()._2,
+        result._2.toString())
+    }
+    testResultArray.toList.asJava
+  }
+
+  def zooEvaluate(
+      module: KerasNet[T],
+      x: ImageSet,
+      batchSize: Int): JList[EvaluatedResult] = {
+    val resultArray = module.evaluate(x, batchSize)
     val testResultArray = resultArray.map { result =>
       EvaluatedResult(result._1.result()._1, result._1.result()._2,
         result._2.toString())
@@ -229,9 +248,9 @@ class PythonZooKeras[T: ClassTag](implicit ev: TensorNumeric[T]) extends PythonB
   def zooPredictClasses(
       module: KerasNet[T],
       x: JavaRDD[Sample],
-      batchSize: Int = 32,
+      batchPerThread: Int,
       zeroBasedLabel: Boolean = true): JavaRDD[Int] = {
-    module.predictClasses(toJSample(x), batchSize, zeroBasedLabel).toJavaRDD()
+    module.predictClasses(toJSample(x), batchPerThread, zeroBasedLabel).toJavaRDD()
   }
 
   def newGraph(model: NetUtils[T, _],
@@ -842,6 +861,12 @@ class PythonZooKeras[T: ClassTag](implicit ev: TensorNumeric[T]) extends PythonB
     Bidirectional(layer, mergeMode, toScalaShape(inputShape))
   }
 
+  def createZooKerasKerasLayerWrapper(
+       torchLayer: AbstractModule[Activity, Activity, T],
+       inputShape: JList[Int] = null): KerasLayerWrapper[T] = {
+    new KerasLayerWrapper(torchLayer, toScalaShape(inputShape))
+  }
+
 
   // ================================= Torch layers in Keras style =================================
 
@@ -850,6 +875,38 @@ class PythonZooKeras[T: ClassTag](implicit ev: TensorNumeric[T]) extends PythonB
       index: Int,
       inputShape: JList[Int] = null): Select[T] = {
     Select(dim, index, toScalaShape(inputShape))
+  }
+
+  def createZooKerasSparseDense(
+      outputDim: Int,
+      init: String = "glorot_uniform",
+      activation: String = null,
+      wRegularizer: Regularizer[T] = null,
+      bRegularizer: Regularizer[T] = null,
+      backwardStart: Int = -1,
+      backwardLength: Int = -1,
+      initWeight: JTensor = null,
+      initBias: JTensor = null,
+      initGradWeight: JTensor = null,
+      initGradBias: JTensor = null,
+      bias: Boolean = true,
+      inputShape: JList[Int] = null): SparseDense[T] = {
+    SparseDense(outputDim, init, activation, wRegularizer,
+      bRegularizer, backwardStart, backwardLength, toTensor(initWeight),
+      toTensor(initBias), toTensor(initGradWeight), toTensor(initGradBias),
+      bias, toScalaShape(inputShape))
+  }
+
+  def createZooKerasSparseEmbedding(
+       inputDim: Int,
+       outputDim: Int,
+       combiner: String = "sum",
+       maxNorm: Double = -1,
+       init: String = "uniform",
+       wRegularizer: Regularizer[T] = null,
+       inputShape: JList[Int] = null): SparseEmbedding[T] = {
+    SparseEmbedding(inputDim, outputDim, combiner.toLowerCase,
+      maxNorm, init, wRegularizer, toScalaShape(inputShape))
   }
 
   def createZooKerasNarrow(
@@ -1107,16 +1164,65 @@ class PythonZooKeras[T: ClassTag](implicit ev: TensorNumeric[T]) extends PythonB
   def createZooKerasSparseCategoricalCrossEntropy(
       logProbAsInput: Boolean = false,
       zeroBasedLabel: Boolean = true,
-      weights: Tensor[T] = null,
+      weights: JTensor = null,
       sizeAverage: Boolean = true,
       paddingValue: Int = -1): SparseCategoricalCrossEntropy[T] = {
-    SparseCategoricalCrossEntropy(logProbAsInput, zeroBasedLabel, weights,
+    SparseCategoricalCrossEntropy(logProbAsInput, zeroBasedLabel,
+      if (weights == null) null else toTensor(weights),
       sizeAverage, paddingValue)
   }
 
   def createZooKerasMeanAbsoluteError(
       sizeAverage: Boolean = true): MeanAbsoluteError[T] = {
     MeanAbsoluteError[T](sizeAverage)
+  }
+
+  def createZooKerasMeanSquaredError(
+      sizeAverage: Boolean = true): MeanSquaredError[T] = {
+    MeanSquaredError[T](sizeAverage)
+  }
+
+  def createZooKerasCategoricalCrossEntropy(): CategoricalCrossEntropy[T] = {
+    CategoricalCrossEntropy[T]()
+  }
+
+  def createZooKerasKullbackLeiblerDivergence(): KullbackLeiblerDivergence[T] = {
+    KullbackLeiblerDivergence[T]()
+  }
+
+  def createZooKerasPoisson(): Poisson[T] = {
+    Poisson[T]()
+  }
+
+  def createZooKerasMeanAbsolutePercentageError(): MeanAbsolutePercentageError[T] = {
+    MeanAbsolutePercentageError[T]()
+  }
+
+  def createZooKerasMeanSquaredLogarithmicError(): MeanSquaredLogarithmicError[T] = {
+    MeanSquaredLogarithmicError[T]()
+  }
+
+  def createZooKerasCosineProximity(): CosineProximity[T] = {
+    CosineProximity[T]()
+  }
+
+  def createZooKerasSquaredHinge(
+    margin : Double = 1.0, sizeAverage : Boolean = true):
+      SquaredHinge[T] = {SquaredHinge[T](margin, sizeAverage)
+  }
+
+  def createZooKerasHinge(
+    margin: Double = 1.0, sizeAverage: Boolean = true):
+      Hinge[T] = {Hinge[T](margin, sizeAverage)
+  }
+
+  def createZooKerasBinaryCrossEntropy(
+      weights: JTensor = null,
+      sizeAverage: Boolean = true
+      ): BinaryCrossEntropy[T] = {
+    BinaryCrossEntropy[T](
+      if (weights == null) null else toTensor(weights),
+      sizeAverage)
   }
 
   def createZooKerasAccuracy(
